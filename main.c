@@ -20,19 +20,15 @@
 #include <strings.h>
 
 /*
- * Small CLI to manage per-user QEMU VMs and their camera bridge.
- * Responsibilities:
- * - Prepare a shared base qcow2 image (download + provisioning stamp)
- * - Manage per-account data in ./vm/userdata/accounts/<name>
- * - Start/stop VMs with SSH port forwarding and camera MJPEG bridge
- * - Provide a REPL with helper commands (create, clone, reset, delete)
+ * EN: CLI to manage per-user QEMU VMs and a camera bridge.
+ * DE: CLI zum Verwalten von QEMU-VMs pro Benutzer und einer Kamera-Bridge.
  */
 
-#define ACCOUNTS_DIR "./vm/userdata/accounts"   /* per-account folders */
-#define BASE_DIR "./vm"                          /* shared VM assets */
-#define VM_BASE_QCOW2 "./vm/base.qcow2"         /* base qcow2 image */
-#define VM_LAUNCH_BIN "./vm/launch"             /* helper binary to copy */
-#define VM_PROVISIONER "./vm/provision_base.sh"  /* script that provisions base */
+#define ACCOUNTS_DIR "./vm/userdata/accounts"   /* EN: per-account folders / DE: Ordner pro Account */
+#define BASE_DIR "./vm"                          /* EN: shared VM assets / DE: gemeinsame VM-Assets */
+#define VM_BASE_QCOW2 "./vm/base.qcow2"         /* EN: base qcow2 image / DE: Basis-qcow2-Image */
+#define VM_LAUNCH_BIN "./vm/launch"             /* EN: helper binary to copy / DE: Hilfs-Binary */
+#define VM_PROVISIONER "./vm/provision_base.sh" /* EN: base provision script / DE: Basis-Provisionierung */
 #define SSH_PORT_FILE "ssh.port"
 #define SSH_V6_PID_FILE "sshv6.pid"
 #define SSH_V6_LOG_NAME "sshv6.log"
@@ -54,7 +50,7 @@ struct Config {
 
 static struct Config g_cfg = { DEFAULT_BASE_IMAGE_URL, IP_MODE_IPV6 };
 
-/* core commands */
+/* EN: core commands. / DE: Kernbefehle. */
 int selectAccount(char *accountName);
 int ensureBaseImage(void);
 int ensureBaseProvisioned(void);
@@ -76,33 +72,33 @@ int deployLaunchBinary(const char *accountDir);
 void stopCameraBridge(const char *accountDir);
 void stopIPv6Forward(const char *accountDir);
 
-/* helpers */
+/* EN: helpers. / DE: Hilfsfunktionen. */
 int findFreePortFrom(int startPort);
  
 void showHelp(void);
 void menu(void);
 void loadConfig(void);
 
-/* ask confirmation from stdin; empty input counts as YES */
+/* EN: confirm via stdin; empty input means YES. / DE: bestaetigen; leer = JA. */
 static int ask_yes_default_yes(const char *prompt) {
     char buf[32];
     printf("%s", prompt);
     if (!fgets(buf, sizeof(buf), stdin)) return 0;
     buf[strcspn(buf, "\n")] = '\0';
-    if (buf[0] == '\0') return 1; /* default yes */
+    if (buf[0] == '\0') return 1; /* EN: default yes / DE: Standard = ja */
     if (buf[0] == 'y' || buf[0] == 'Y') return 1;
     return 0;
 }
 
 void showServerIP(void);
 
-/* pidfile helpers */
+/* EN: pidfile helpers. / DE: pidfile-Helfer. */
 static pid_t pidfile_read(const char *path);
 static int process_is_running(pid_t pid);
 static void trim_trailing_ws(char *s);
 static void trim_leading_ws(char **p);
 
-/* recursively create a directory path (mkdir -p behavior) */
+/* EN: recursively create a directory path (mkdir -p). / DE: rekursiv Verzeichnis anlegen (mkdir -p). */
 static int ensure_dir(const char *path) {
     if (!path || !*path) { errno = EINVAL; return -1; }
     char tmp[PATH_MAX];
@@ -123,7 +119,7 @@ static int ensure_dir(const char *path) {
     return 0;
 }
 
-/* drop trailing whitespace (including newlines) in-place */
+/* EN: drop trailing whitespace (incl. newlines). / DE: Leerraum am Ende entfernen. */
 static void trim_trailing_ws(char *s) {
     if (!s) return;
     size_t len = strlen(s);
@@ -133,13 +129,13 @@ static void trim_trailing_ws(char *s) {
     }
 }
 
-/* advance pointer past leading whitespace */
+/* EN: advance pointer past leading whitespace. / DE: Zeiger hinter fuehrenden Leerraum setzen. */
 static void trim_leading_ws(char **p) {
     if (!p || !*p) return;
     while (**p && isspace((unsigned char)**p)) (*p)++;
 }
 
-/* read pid from a pidfile; returns 0 on error */
+/* EN: read pid from pidfile; 0 on error. / DE: PID lesen; 0 bei Fehler. */
 static pid_t pidfile_read(const char *path) {
     FILE *f = fopen(path, "r");
     if (!f) return 0;
@@ -150,7 +146,7 @@ static pid_t pidfile_read(const char *path) {
     return (pid_t)p;
 }
 
-/* check if a pid is alive, treating EPERM as alive */
+/* EN: check if pid is alive (EPERM counts as alive). / DE: Prozess lebt? (EPERM gilt). */
 static int process_is_running(pid_t pid) {
     if (pid <= 0) return 0;
     if (kill(pid, 0) == 0) return 1;
@@ -158,7 +154,7 @@ static int process_is_running(pid_t pid) {
     return 0;
 }
 
-/* prompt user for an account name and verify it exists */
+/* EN: prompt for account name and verify it exists. / DE: Accountname abfragen und pruefen. */
 int selectAccount(char *accountName) {
     listAccounts();
     printf("Enter account name: ");
@@ -177,10 +173,8 @@ int selectAccount(char *accountName) {
 
  
 /*
- * Ensure a base qcow2 exists at VM_BASE_QCOW2.
- * - mkdir -p ./vm
- * - download the current cloud image if missing
- * - run provisioning once (stamp file prevents re-run)
+ * EN: ensure base qcow2 exists at VM_BASE_QCOW2.
+ * DE: Basis-qcow2 unter VM_BASE_QCOW2 sicherstellen.
  */
 int ensureBaseImage(void) {
     if (ensure_dir(BASE_DIR) != 0) { perror("mkdir base"); return -1; }
@@ -200,8 +194,8 @@ int ensureBaseImage(void) {
 }
 
 /*
- * Run provisioning script against the base image exactly once.
- * A success stamp is written to BASE_PROVISION_STAMP to skip future runs.
+ * EN: run provisioning script once per process.
+ * DE: Provisioning-Skript einmal pro Prozess ausfuehren.
  */
 int ensureBaseProvisioned(void) {
     static int already_ran = 0;
@@ -228,7 +222,7 @@ int ensureBaseProvisioned(void) {
 }
 
  
-/* list existing account directories */
+/* EN: list existing account directories. / DE: vorhandene Accounts auflisten. */
 void listAccounts(void) {
     struct dirent *entry;
     DIR *dp = opendir(ACCOUNTS_DIR);
@@ -246,14 +240,14 @@ void listAccounts(void) {
 }
 
  
-/* Create ./vm/userdata/accounts if needed (mkdir -p semantics). */
+/* EN: create ./vm/userdata/accounts if needed (mkdir -p). / DE: Ordner bei Bedarf anlegen. */
 int ensureAccountsFolder(void) {
     if (ensure_dir(ACCOUNTS_DIR) != 0) { perror("mkdir accounts"); return -1; }
     return 0;
 }
 
  
-/* allow only safe account names (alnum + -_. and no slashes) */
+/* EN: allow only safe account names (alnum + -_.). / DE: nur sichere Namen (alnum + -_.). */
 static int validateName(const char *name) {
     if (!name || !*name) return 0;
     if (strchr(name, '/')) return 0;
@@ -265,7 +259,7 @@ static int validateName(const char *name) {
 }
 
  
-/* copy a single file, overwriting destination */
+/* EN: copy a single file, overwriting destination. / DE: Datei kopieren (ueberschreiben). */
 static int copyFile(const char *src, const char *dst) {
     int in = open(src, O_RDONLY);
     if (in < 0) return -1;
@@ -282,7 +276,7 @@ static int copyFile(const char *src, const char *dst) {
 }
 
  
-/* rm -rf equivalent for files, dirs, and symlinks */
+/* EN: rm -rf equivalent for files/dirs/symlinks. / DE: rm -rf fuer Dateien/Ordner/Symlinks. */
 static int remove_recursive(const char *path) {
     struct stat st;
     if (lstat(path, &st) != 0) { perror("lstat"); return -1; }
@@ -307,7 +301,7 @@ static int remove_recursive(const char *path) {
 }
 
  
-/* cp -a equivalent: recurse, preserve symlinks and modes */
+/* EN: cp -a equivalent (recurse, keep symlinks/modes). / DE: cp -a (rekursiv, Symlinks/Modi). */
 static int copy_recursive(const char *src, const char *dst) {
     struct stat st;
     if (lstat(src, &st) != 0) { perror("lstat src"); return -1; }
@@ -350,7 +344,7 @@ static int copy_recursive(const char *src, const char *dst) {
     return (r == 0) ? 0 : -1;
 }
 
-/* write an integer with trailing newline to a file */
+/* EN: read an integer from a file. / DE: Integer aus Datei lesen. */
 static int read_int_file(const char *path, int *out) {
     if (!out) return -1;
     FILE *f = fopen(path, "r");
@@ -371,7 +365,7 @@ static int write_int_file(const char *path, int value) {
     return (w == len) ? 0 : -1;
 }
 
-/* copy the launch helper binary into a user directory */
+/* EN: copy launch helper into account dir. / DE: Launch-Helfer ins Account-Verz. */
 int deployLaunchBinary(const char *accountDir) {
     char dst[PATH_MAX];
     if (snprintf(dst, sizeof(dst), "%s/launch", accountDir) >= (int)sizeof(dst)) return -1;
@@ -388,11 +382,8 @@ int deployLaunchBinary(const char *accountDir) {
 }
 
 /*
- * Start the per-account camera bridge via the bundled launch helper.
- * - Reuses an already-running bridge if pidfile is alive
- * - Picks a free TCP port (preferring preferredStartPort)
- * - Persists port/pid files next to the account
- * - Returns the child pid or -1 on failure
+ * EN: start per-account camera bridge via launch helper.
+ * DE: Kamera-Bridge pro Account via Launch-Helfer starten.
  */
 pid_t startCameraBridge(const char *accountDir, int preferredStartPort, int *outPort) {
     char bin[PATH_MAX], out[PATH_MAX], logp[PATH_MAX], pidp[PATH_MAX], portfile[PATH_MAX];
@@ -405,10 +396,15 @@ pid_t startCameraBridge(const char *accountDir, int preferredStartPort, int *out
     pid_t existing = pidfile_read(pidp);
     if (existing && process_is_running(existing)) {
         fprintf(stderr, "Camera bridge already running (pid=%d).\n", (int)existing);
-        if (outPort) *outPort = -1;
+        if (outPort) {
+            int port = -1;
+            (void)read_int_file(portfile, &port);
+            *outPort = port;
+        }
         return existing;
     }
     unlink(pidp);
+    unlink(portfile);
 
     if (deployLaunchBinary(accountDir) != 0) {
         fprintf(stderr, "Failed to deploy launch helper into %s\n", accountDir);
@@ -420,11 +416,6 @@ pid_t startCameraBridge(const char *accountDir, int preferredStartPort, int *out
         fprintf(stderr, "No free port for camera bridge\n");
         return -1;
     }
-    if (write_int_file(portfile, port) != 0) {
-        fprintf(stderr, "Warning: failed to write camera port file\n");
-    }
-    if (outPort) *outPort = port;
-
     int pw[2];
     if (pipe(pw) != 0) { perror("pipe"); return -1; }
 
@@ -443,6 +434,7 @@ pid_t startCameraBridge(const char *accountDir, int preferredStartPort, int *out
         char *const argv[] = { bin, "--camera-port", portStr, "--out", out, "--log", logp, "--pid-file", pidp, NULL };
         execv(bin, argv);
 
+        /* EN: report execv failure to parent. / DE: execv-Fehler an Parent melden. */
         int save_errno = errno;
         (void)write(pw[1], &save_errno, sizeof(save_errno));
         close(pw[1]);
@@ -455,19 +447,25 @@ pid_t startCameraBridge(const char *accountDir, int preferredStartPort, int *out
     close(pw[0]);
 
     if (r == 0) {
+        if (write_int_file(portfile, port) != 0) {
+            fprintf(stderr, "Warning: failed to write camera port file\n");
+        }
+        if (outPort) *outPort = port;
         return pid;
     }
     if (r > 0) {
         int status = 0; waitpid(pid, &status, 0);
         fprintf(stderr, "Failed to start camera bridge: errno=%d\n", child_errno);
+        unlink(portfile);
     } else {
         int saved = errno; fprintf(stderr, "Failed to start camera bridge: pipe read error: %s\n", strerror(saved));
         waitpid(pid, NULL, 0);
+        unlink(portfile);
     }
     return -1;
 }
 
-/* stop camera bridge if running and clean pid/port files */
+/* EN: stop camera bridge and clean pid/port files. / DE: Kamera-Bridge stoppen, pid/port aufraeumen. */
 void stopCameraBridge(const char *accountDir) {
     char pidp[PATH_MAX], portfile[PATH_MAX];
     if (snprintf(pidp, sizeof(pidp), "%s/%s", accountDir, CAMERA_PID_NAME) >= (int)sizeof(pidp)) return;
@@ -480,7 +478,7 @@ void stopCameraBridge(const char *accountDir) {
     unlink(portfile);
 }
 
-/* start IPv6 -> IPv4 SSH forwarder using socat (per-account) */
+/* EN: start IPv6->IPv4 SSH forward via socat. / DE: IPv6->IPv4 SSH-Forward via socat. */
 pid_t startIPv6Forward(const char *accountDir, int port) {
     if (g_cfg.ip_mode != IP_MODE_IPV6) return 0;
     char pidp[PATH_MAX], logp[PATH_MAX];
@@ -520,7 +518,7 @@ pid_t startIPv6Forward(const char *accountDir, int port) {
     return pid;
 }
 
-/* stop IPv6 forwarder if running */
+/* EN: stop IPv6 forwarder if running. / DE: IPv6-Forward stoppen. */
 void stopIPv6Forward(const char *accountDir) {
     char pidp[PATH_MAX];
     if (snprintf(pidp, sizeof(pidp), "%s/%s", accountDir, SSH_V6_PID_FILE) >= (int)sizeof(pidp)) return;
@@ -532,7 +530,7 @@ void stopIPv6Forward(const char *accountDir) {
 }
 
  
-/* bind-scan for a free TCP port on all interfaces starting at startPort */
+/* EN: bind-scan free TCP port from startPort. / DE: freien TCP-Port ab startPort suchen. */
 int findFreePortFrom(int startPort) {
     int s = socket(AF_INET6, SOCK_STREAM, 0);
     if (s < 0) return -1;
@@ -557,10 +555,7 @@ int findFreePortFrom(int startPort) {
     close(s);
     return -1;
 }
-/*
- * Create a new account directory with a fresh disk copy and helper binary.
- * The launch helper is copied so per-account processes can run locally.
- */
+/* EN: create account dir with fresh disk + helper. / DE: Account mit frischer Disk + Helfer. */
 void createUser(void) {
     if (ensureAccountsFolder() != 0) { printf("accounts folder missing and cannot be created\n"); return; }
     char name[128];
@@ -589,10 +584,7 @@ void createUser(void) {
     printf("Account '%s' created at %s\n", name, accountPath);
 }
 
-/*
- * Delete an account after confirmation and only if its VM is not running.
- * Also removes per-account camera artifacts.
- */
+/* EN: delete account after confirmation if VM is stopped. / DE: Account loeschen, wenn VM aus ist. */
 void removeUser(void) {
     char name[50];
     printf("Enter account name to delete: ");
@@ -607,7 +599,7 @@ void removeUser(void) {
     if (!d) { printf("Error: Account '%s' does not exist!\n", name); return; }
     closedir(d);
 
-    /* refuse to delete while VM is running */
+    /* EN: refuse to delete while VM is running. / DE: nicht loeschen, wenn VM laeuft. */
     char userPid[PATH_MAX]; snprintf(userPid, sizeof(userPid), "%s/%s/vm.pid", ACCOUNTS_DIR, name);
     pid_t existing = pidfile_read(userPid);
     if (existing && process_is_running(existing)) {
@@ -623,7 +615,7 @@ void removeUser(void) {
     printf("Account '%s' deleted.\n", name);
 }
 
-/* quick existence check for an account */
+/* EN: quick existence check. / DE: schneller Existenz-Check. */
 void checkUser(void) {
     char name[128]; printf("Enter account name to check: ");
     if (!fgets(name, sizeof(name), stdin)) return;
@@ -632,7 +624,7 @@ void checkUser(void) {
     DIR *d = opendir(accountPath); if (d) { closedir(d); printf("Account '%s' exists.\n", name); } else printf("Account '%s' does not exist.\n", name);
 }
 
-/* print account disk path and (persisted) SSH port if known */
+/* EN: show account disk path and SSH port. / DE: Disk-Pfad und SSH-Port anzeigen. */
 void userInfo(void) {
     char name[128]; printf("Enter account name: ");
     if (!fgets(name, sizeof(name), stdin)) return;
@@ -653,7 +645,7 @@ void userInfo(void) {
     printf("User: %s\nDisk: %s\nSSH Port: %d\nDisk exists: %s\n", name, disk, port, access(disk, F_OK) == 0 ? "yes" : "no");
 }
 
-/* Deep copy an existing account directory to a new account name. */
+/* EN: deep copy account dir to new name. / DE: Account-Verzeichnis tief kopieren. */
 void cloneUser(void) {
     char src[128], dest[128]; printf("Enter source user: ");
     if (!fgets(src, sizeof(src), stdin)) return;
@@ -673,7 +665,7 @@ void cloneUser(void) {
     printf("User '%s' cloned to '%s'.\n", src, dest);
 }
 
-/* Replace an account's disk with a fresh base image copy (keeps other files). */
+/* EN: reset disk to base image (keep other files). / DE: Disk auf Basis zuruecksetzen. */
 void resetUser(void) {
     char name[128];
     printf("Enter account to reset: ");
@@ -701,7 +693,7 @@ void resetUser(void) {
 }
 
 
-/* Redownload and re-provision the shared base image unconditionally. */
+/* EN: redownload and re-provision base image. / DE: Basis neu laden und provisionieren. */
 void rebuildBase(void) {
     printf("Rebuilding base image...\n");
     if (access(VM_BASE_QCOW2, F_OK) == 0) { if (unlink(VM_BASE_QCOW2) != 0) perror("unlink base"); }
@@ -709,7 +701,7 @@ void rebuildBase(void) {
     printf("Base image rebuilt.\n");
 }
 
-/* find a non-loopback IPv6/IPv4 address to advertise to users */
+/* EN: find non-loopback IPv6/IPv4 for display. / DE: nicht-Loopback IPv6/IPv4 finden. */
 void showServerIP(void) {
     struct ifaddrs *ifaddr, *ifa;
     char found6[INET6_ADDRSTRLEN] = "";
@@ -766,15 +758,7 @@ void showServerIP(void) {
 }
  
 
-/*
- * Start a VM for a chosen account with SSH port forwarding and camera bridge.
- * Steps:
- * - Validate base image presence and copy per-account disk if missing
- * - Reserve/persist a free SSH port (ipv4/ipv6 listen)
- * - Start camera bridge on the next port
- * - Spawn qemu headless with virtio disk and shared folder
- * - Write pid/log files to the account directory
- */
+/* EN: start VM with SSH forward + camera bridge. / DE: VM mit SSH-Forward + Kamera-Bridge. */
 void startVM(void) {
     const char *qemu_bin = NULL;
     if (access("/usr/bin/qemu-system-x86_64", X_OK) == 0) {
@@ -791,7 +775,7 @@ void startVM(void) {
     char accountName[128]; if (!selectAccount(accountName)) return;
     char diskPath[PATH_MAX]; snprintf(diskPath, sizeof(diskPath), "%s/%s/disk.qcow2", ACCOUNTS_DIR, accountName);
 
-    /* check for existing running VM for this account */
+    /* EN: check for existing running VM. / DE: laufende VM pruefen. */
     char pidpath[PATH_MAX]; snprintf(pidpath, sizeof(pidpath), "%s/%s/vm.pid", ACCOUNTS_DIR, accountName);
     pid_t existing = pidfile_read(pidpath);
     if (existing) {
@@ -799,7 +783,7 @@ void startVM(void) {
             printf("Error: VM for '%s' already running (pid=%d).\n", accountName, (int)existing);
             return;
         } else {
-            /* remove stale pidfile */
+            /* EN: remove stale pidfile. / DE: veraltetes pidfile loeschen. */
             unlink(pidpath);
         }
     }
@@ -852,29 +836,32 @@ void startVM(void) {
         int flags = fcntl(pw[1], F_GETFD);
         if (flags != -1) fcntl(pw[1], F_SETFD, flags | FD_CLOEXEC);
 
-          int fd = open(userLog, O_CREAT | O_WRONLY | O_APPEND, 0644);
-          if (fd >= 0) { dup2(fd, STDOUT_FILENO); dup2(fd, STDERR_FILENO); close(fd); }
-          
-          int nullfd = open("/dev/null", O_RDONLY);
-          if (nullfd >= 0) { dup2(nullfd, STDIN_FILENO); if (nullfd != STDIN_FILENO) close(nullfd); }
-                /* always bind SSH forward on IPv4; IPv6 mode uses socat to bridge */
-                char netdevarg[192];
-                snprintf(netdevarg, sizeof(netdevarg), "user,id=net0,hostfwd=tcp:127.0.0.1:%d-:22", sshPort);
-                char drivearg[PATH_MAX + 64]; snprintf(drivearg, sizeof(drivearg), "file=%s,format=qcow2,if=virtio", diskPath);
-                char *const argv[] = {
-                    (char *)qemu_bin,
-                    "-m", "512M",
-                    "-cpu", "host",
-                    "-nographic",
-                    "-device", "virtio-rng-pci", /* provide entropy so sshd banner is fast */
-                    "-netdev", netdevarg,
-                    "-device", "virtio-net-pci,netdev=net0",
-                    "-drive", drivearg,
-                    NULL
-                };
+        int fd = open(userLog, O_CREAT | O_WRONLY | O_APPEND, 0644);
+        if (fd >= 0) { dup2(fd, STDOUT_FILENO); dup2(fd, STDERR_FILENO); close(fd); }
+
+        int nullfd = open("/dev/null", O_RDONLY);
+        if (nullfd >= 0) { dup2(nullfd, STDIN_FILENO); if (nullfd != STDIN_FILENO) close(nullfd); }
+
+        /* EN: bind SSH on IPv4; IPv6 uses socat bridge. / DE: SSH via IPv4; IPv6 via socat. */
+        char netdevarg[192];
+        snprintf(netdevarg, sizeof(netdevarg), "user,id=net0,hostfwd=tcp:127.0.0.1:%d-:22", sshPort);
+        char drivearg[PATH_MAX + 64];
+        snprintf(drivearg, sizeof(drivearg), "file=%s,format=qcow2,if=virtio", diskPath);
+        char *const argv[] = {
+            (char *)qemu_bin,
+            "-m", "512M",
+            "-cpu", "host",
+            "-nographic",
+            "-device", "virtio-rng-pci", /* EN: entropy for sshd. / DE: Entropie fuer sshd. */
+            "-netdev", netdevarg,
+            "-device", "virtio-net-pci,netdev=net0",
+            "-drive", drivearg,
+            NULL
+        };
         execv(qemu_bin, argv);
 
         
+        /* EN: report execv failure to parent. / DE: execv-Fehler an Parent melden. */
         int save_errno = errno;
         (void)write(pw[1], &save_errno, sizeof(save_errno));
         close(pw[1]);
@@ -903,16 +890,20 @@ void startVM(void) {
     } else if (r > 0) {
         int status = 0; waitpid(pid, &status, 0);
         fprintf(stderr, "Failed to start qemu: exec failed (errno=%d)\n", child_errno);
+        stopCameraBridge(accountDir);
+        unlink(sshportpath);
         return;
     } else {
         int saved = errno; fprintf(stderr, "Failed to start qemu: pipe read error: %s\n", strerror(saved));
         waitpid(pid, NULL, 0);
+        stopCameraBridge(accountDir);
+        unlink(sshportpath);
         return;
     }
     int fd = open(userLog, O_CREAT | O_WRONLY | O_APPEND, 0644); if (fd >= 0) close(fd);
 }
 
-/* Stop VM and camera bridge for a selected account, cleaning pid files. */
+/* EN: stop VM and camera bridge; clean pid files. / DE: VM+Kamera stoppen; pid aufraeumen. */
 void stopVM(void) {
     char accountName[128];
     if (!selectAccount(accountName)) return;
@@ -935,25 +926,25 @@ void stopVM(void) {
 }
 
  
-/* print the interactive command list */
+/* EN: print the interactive command list. / DE: interaktive Befehlsliste. */
 void showHelp(void) {
     printf("\nAvailable commands:\n");
-    printf("checkuser     - Check if an account exists\n");
-    printf("cloneuser     - Clone an existing user\n");
-    printf("createuser    - Create new account\n");
-    printf("exit          - Exit terminal\n");
-    printf("help          - Show this help\n");
-    printf("listuser      - List accounts\n");   
-    printf("rebuildbase   - Redownload the base qcow2 image\n");
-    printf("removeuser    - Delete an account\n");
-    printf("resetuser     - Reset a user's disk.qcow2 from base\n");
-    printf("startvm       - Start a VM\n");
-    printf("stopvm        - Stop all VMs\n");
-    printf("serverip      - Show server IP address\n");
-    printf("userinfo      - Show info about a user\n\n");
+    printf("checkuser     - Check if an account exists.\n");
+    printf("cloneuser     - Clone an existing user.\n");
+    printf("createuser    - Create new account.\n");
+    printf("exit          - Exit terminal.\n");
+    printf("help          - Show this help.\n");
+    printf("listuser      - List accounts.\n");
+    printf("rebuildbase   - Redownload the base qcow2 image.\n");
+    printf("removeuser    - Delete an account.\n");
+    printf("resetuser     - Reset a user's disk.qcow2 from base.\n");
+    printf("startvm       - Start a VM.\n");
+    printf("stopvm        - Stop a VM.\n");
+    printf("serverip      - Show server IP address.\n");
+    printf("userinfo      - Show info about a user.\n\n");
 }
 
-/* REPL-style command loop */
+/* EN: REPL-style command loop. / DE: REPL-aehnliche Schleife. */
 void menu(void) {
     char input[64];
     printf("For help type 'help'\n");
@@ -983,7 +974,7 @@ void menu(void) {
     }
 }
 
-/* entry point: ensure folders/base exist, then enter menu loop */
+/* EN: entry point (prepare folders/base, then menu). / DE: Einstieg (Ordner/Basis, dann Menu). */
 int main(void) {
     loadConfig();
     if (ensureAccountsFolder() != 0) {
@@ -996,9 +987,9 @@ int main(void) {
     return 0;
 }
 
-/* Parse config.cfg for base_image_url and ip_mode. Missing file keeps defaults. */
+/* EN: parse config.cfg for base_image_url and ip_mode. / DE: config.cfg fuer base_image_url und ip_mode. */
 void loadConfig(void) {
-    /* reset defaults */
+    /* EN: reset defaults. / DE: Standardwerte setzen. */
     snprintf(g_cfg.base_image_url, sizeof(g_cfg.base_image_url), "%s", DEFAULT_BASE_IMAGE_URL);
     g_cfg.ip_mode = IP_MODE_IPV6;
 

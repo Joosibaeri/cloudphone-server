@@ -14,7 +14,7 @@ if ! command -v virt-customize >/dev/null 2>&1; then
   exit 1
 fi
 
-# Speed up libguestfs on some hosts
+# EN: speed up libguestfs on some hosts. / DE: libguestfs auf manchen Hosts beschleunigen.
 : "${LIBGUESTFS_BACKEND:=direct}"
 export LIBGUESTFS_BACKEND
 
@@ -37,6 +37,7 @@ virt-customize -a "$BASE_IMAGE" \
   --run-command 'rm -f /etc/systemd/system/cloudphone-dhcp.service || true' \
   --run-command 'rm -f /etc/systemd/system/multi-user.target.wants/cloudphone-dhcp.service || true' \
   --run-command 'systemctl disable firewalld || true' \
+  --run-command 'mkdir -p /etc/NetworkManager/system-connections' \
   --write '/etc/NetworkManager/system-connections/cloudphone-eth0.nmconnection:[connection]
 id=cloudphone-eth0
 type=ethernet

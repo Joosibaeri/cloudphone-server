@@ -85,7 +85,7 @@ static int copy_stream(int client_fd, const char *out_path, size_t max_bytes, FI
 	size_t total = 0;
 	while (!g_stop) {
 		ssize_t r = read(client_fd, buf, sizeof(buf));
-		if (r == 0) break; /* client closed */
+		if (r == 0) break; /* EN: client closed. / DE: Client getrennt. */
 		if (r < 0) {
 			if (errno == EINTR) continue;
 			log_line(logf, "read error");
@@ -122,7 +122,7 @@ int main(int argc, char **argv) {
 	const char *out_path = NULL;
 	const char *log_path = NULL;
 	const char *pid_path = NULL;
-	size_t max_bytes = 50 * 1024 * 1024; /* default 50MB per connection */
+	size_t max_bytes = 50 * 1024 * 1024; /* EN: default 50MB per connection. / DE: Standard 50MB. */
 
 	for (int i = 1; i < argc; ++i) {
 		if (!strcmp(argv[i], "--camera-port") && i + 1 < argc) {
@@ -186,7 +186,7 @@ int main(int argc, char **argv) {
 			log_line(logf, "select error");
 			break;
 		}
-		if (r == 0) continue; /* timeout */
+		if (r == 0) continue; /* EN: timeout. / DE: Zeitueberschreitung. */
 
 		if (FD_ISSET(s, &rfds)) {
 			struct sockaddr_in peer;

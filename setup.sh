@@ -1,9 +1,49 @@
 #!/bin/bash
 set -e
 
-BASE_DIR="/userdata/base"
-IMG_FILE="$BASE_DIR/base.qcow2"
-DEFAULT_URL="https://dl.rockylinux.org/pub/rocky/9/images/x86_64/Rocky-9-GenericCloud.latest.x86_64.qcow2"
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+CONFIG_PATH="$SCRIPT_DIR/config.cfg"
+BASE_DIR=""
+BASE_IMAGE_URL=""
+IMG_FILE=""
+
+trim() {
+    local s="$1"
+    s="${s#"${s%%[![:space:]]*}"}"
+    s="${s%"${s##*[![:space:]]}"}"
+    printf '%s' "$s"
+}
+
+load_config() {
+    if [ ! -f "$CONFIG_PATH" ]; then
+        echo "Missing config: $CONFIG_PATH" >&2
+        exit 1
+    fi
+
+    while IFS= read -r line; do
+        line=$(trim "$line")
+        case "$line" in
+            ''|\#*|\;*) continue;;
+        esac
+
+        key=$(trim "${line%%=*}")
+        val=$(trim "${line#*=}")
+
+        case "$key" in
+            base_dir) BASE_DIR="$val" ;;
+            base_image_url) BASE_IMAGE_URL="$val" ;;
+        esac
+    done < "$CONFIG_PATH"
+
+    if [ -z "$BASE_DIR" ] || [ -z "$BASE_IMAGE_URL" ]; then
+        echo "Missing base_dir or base_image_url in $CONFIG_PATH" >&2
+        exit 1
+    fi
+
+    IMG_FILE="$BASE_DIR/base.qcow2"
+}
+
+load_config
 
 usage() {
     cat <<EOF
@@ -12,7 +52,7 @@ Usage: $(basename "$0") [--url URL] [--force]
 Download or update the base QCOW2 image used by the server.
 
 Options:
-  -u, --url URL   Download image from URL (default: $DEFAULT_URL)
+    -u, --url URL   Download image from URL (default: $BASE_IMAGE_URL)
   -f, --force     Overwrite existing $IMG_FILE
   -h, --help      Show this help
 EOF
@@ -35,7 +75,7 @@ else
 fi
 
 if [ -z "$URL" ]; then
-    URL="$DEFAULT_URL"
+    URL="$BASE_IMAGE_URL"
 fi
 
 mkdir -p "$BASE_DIR"
@@ -46,9 +86,9 @@ if [ -f "$IMG_FILE" ] && [ "$FORCE" -ne 1 ]; then
 fi
 
 echo "Downloading base image from: $URL"
-# create a temporary filename in BASE_DIR
+# EN: create a temporary filename in BASE_DIR. / DE: temporaere Datei in BASE_DIR.
 tmp=$(mktemp "${BASE_DIR}/baseimg.XXXXXX") || { echo "Failed to create temporary file"; exit 1; }
-# try curl then wget
+# EN: try curl, then wget. / DE: erst curl, dann wget.
 if command -v curl >/dev/null 2>&1; then
     curl -L --fail -o "$tmp" "$URL" || { echo "Download failed"; rm -f "$tmp"; exit 1; }
 elif command -v wget >/dev/null 2>&1; then
