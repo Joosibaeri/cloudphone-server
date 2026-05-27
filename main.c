@@ -97,6 +97,7 @@ static pid_t pidfile_read(const char *path);
 static int process_is_running(pid_t pid);
 static void trim_trailing_ws(char *s);
 static void trim_leading_ws(char **p);
+static int validateName(const char *name);
 
 /* EN: recursively create a directory path (mkdir -p). / DE: rekursiv Verzeichnis anlegen (mkdir -p). */
 static int ensure_dir(const char *path) {
@@ -162,6 +163,21 @@ int selectAccount(char *accountName) {
         return 0;
     }
     accountName[strcspn(accountName, "\n")] = 0;
+    trim_trailing_ws(accountName);
+    char *p = accountName;
+    trim_leading_ws(&p);
+    if (p != accountName) {
+        memmove(accountName, p, strlen(p) + 1);
+    }
+
+    if (accountName[0] == '\0') {
+        printf("Error: account name cannot be empty\n");
+        return 0;
+    }
+    if (!validateName(accountName)) {
+        printf("Error: invalid account name\n");
+        return 0;
+    }
 
     char path[PATH_MAX];
     snprintf(path, sizeof(path), "%s/%s", ACCOUNTS_DIR, accountName);
