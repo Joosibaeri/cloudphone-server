@@ -1,0 +1,20 @@
+# Build outputs
+/main
+/vm/launch
+/vm/base.qcow2
+
+# Runtime artifacts
+/vm/userdata/
+/vm/*.log
+/vm/*.pid
+/vm/*.port
+/vm/*.mjpg
+/vm/*.bak
+
+# Local editor and OS files
+/.vscode/
+/.idea/
+*.swp
+*.swo
+*~
+.DS_Store
